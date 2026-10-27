@@ -1,0 +1,13 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.venv-msys/
+.cache/
+dota_data/
+*.sqlite3
+*.dem
+*.html
+*.csv
+
+!dota_review/report.html
+!dota_review/web_ui.html
