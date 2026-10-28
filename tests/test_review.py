@@ -74,12 +74,14 @@ class ReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             data = fixture(root / "test.dem")
+            data["inventory_snapshots"] = [{"slot": 0, "time_s": 20, "tick": 600, "items": {"0": "item_blink"}}]
             data["players"][0]["name"] = "</script><img src=x>"
             with Store(root / "review.sqlite3") as store:
                 self.assertTrue(store.save(data))
                 self.assertFalse(store.save(data))
                 loaded = store.load(data["id"])
                 self.assertEqual(loaded["players"][0]["name"], "</script><img src=x>")
+                self.assertEqual(loaded["inventory_snapshots"][0]["items"], {"0": "item_blink"})
                 store.set_role(data["id"], 0, 1)
                 self.assertEqual(store.load(data["id"])["players"][0]["role_source"], "manual")
                 store.map_player("42", "carry")

@@ -85,9 +85,15 @@ def normalize_map_features(replay_features: list[dict[str, Any]]) -> list[dict[s
     return static_map_features() + collapsed
 
 
-def track_creeps(path: str, sample_step_s: int = 2, duration_s: int | None = None, game_clock: Any = None) -> tuple[list[dict[str, Any]], str | None, list[dict[str, Any]], list[dict[str, Any]]]:
+def track_creeps(path: str, sample_step_s: int = 2, duration_s: int | None = None, game_clock: Any = None,
+                 inventory_output: list[dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], str | None, list[dict[str, Any]], list[dict[str, Any]]]:
     from gem.parser import ReplayParser
     from gem.state.entities import EntityOp
+
+    inventory_extractor = None
+    if inventory_output is not None:
+        from gem.extractors.players import PlayerExtractor
+        inventory_extractor = PlayerExtractor()
 
     parser = ReplayParser(path)
     active: dict[tuple[int, int], tuple[Any, str]] = {}
@@ -190,7 +196,15 @@ def track_creeps(path: str, sample_step_s: int = 2, duration_s: int | None = Non
     parser.on_entity(on_entity)
     parser.on_tick_start(on_tick)
     parser.on_chat_event(on_chat_event)
+    if inventory_extractor is not None:
+        inventory_extractor.attach(parser)
     parser.parse()
+    if inventory_extractor is not None:
+        inventory_output.extend(
+            {"slot": int(snapshot.player_id), "time_s": int(snapshot.game_time_s),
+             "tick": int(snapshot.tick), "items": {str(slot): name for slot, name in snapshot.items.items()}}
+            for snapshot in inventory_extractor.snapshots if snapshot.game_time_s is not None
+        )
     unit_names = parser.string_tables.get_by_name("UnitNames")
     for feature in features.values():
         unit_id = feature.pop("unit_name_id", None)

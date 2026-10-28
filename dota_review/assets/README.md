@@ -14,6 +14,10 @@ The `icons/` folder contains Dota 2 minimap icons mirrored by the Dota 2 Wiki:
 - `roshan-minimap.png`: Roshan.
 - `tormentor-minimap.png`: Tormentor (魔方).
 - `twin-gate-minimap.png`: Fiend's Gate.
+- `lotus-pool-minimap.png`, `main-shop-minimap.png`, `side-shop-minimap.png`, and `secret-shop-minimap.png`: Lotus Pool and shop icons.
+- `neutral-camp-{small,medium,large,ancient}-minimap.png`: neutral camp size icons.
+- `watcher-minimap.png`: Watcher (侦察守卫).
+- `hero-{own,ally,enemy}-minimap.png`: in-game team-specific hero minimap markers.
 
 Sources: [unit minimap icons](https://dota2.fandom.com/wiki/Category:Unit_minimap_icons)
 and [minimap icons](https://dota2.fandom.com/wiki/Category:Minimap_icons).

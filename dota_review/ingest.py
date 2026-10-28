@@ -272,8 +272,12 @@ def parse_replay(path: str | Path) -> dict[str, Any]:
         raise ValueError("比赛不在指定战队范围：OG、Yandex、PARI、Spirit、XG、1win、Liquid、LGD、Tidebound")
     try:
         from .entities import normalize_map_features, observations_from_creeps, track_creeps
+        inventory_samples: list[dict[str, Any]] = []
         samples, error, replay_features, ability_events = track_creeps(
-            str(path), duration_s=data["duration_s"] or None, game_clock=getattr(match, "game_clock", None))
+            str(path), duration_s=data["duration_s"] or None, game_clock=getattr(match, "game_clock", None),
+            inventory_output=inventory_samples)
+        data["inventory_snapshots"] = inventory_samples
+        data["metadata"]["inventory_coverage"] = "complete" if inventory_samples and error is None else "partial" if inventory_samples else "unknown"
         data["creeps"] = samples
         # Save entity landmarks before deriving lane/camp observations: an
         # observation-analysis error must never discard tower/Roshan positions.

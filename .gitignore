@@ -1,8 +1,15 @@
 __pycache__/
+.env
+.env.*
+!.env.example
 .pytest_cache/
+frontend/node_modules/
+frontend/dist/
 .venv/
 .venv-msys/
 .cache/
+artifacts/
+*.tsbuildinfo
 dota_data/
 *.sqlite3
 *.dem

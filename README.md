@@ -23,7 +23,39 @@ python -m dota_review import match.dem
 python -m dota_review export MATCH_KEY
 ```
 
-所有比赛数据默认放在 `G:\AI0707\dota_agent\dota_data`。数据库为 `dota_data\review.sqlite3`；每场比赛的录像、OpenDota 元数据、HTML 报告和 CSV 放在 `dota_data\matches\对阵\北京时间__赛事名称__比赛ID\`。例如 `matches\yandex——spirit\2026-10-04_00-52_CST__BLAST SLAM VIII__9027799260\`。导入以录像 SHA-256 去重。报告为单个 HTML 文件，不请求网络资源。
+## 网页工作台（MySQL）
+
+本项目数据已迁移到 MySQL 的 `dota_review` 库。网页 API 使用 `dota_review_app` 账号；连接设置放在项目根目录 `.env`，该文件已加入 Git 忽略规则。新环境可参考 `.env.example` 配置 `DOTA_MYSQL_*` 项。不要把真实 `.env` 提交到仓库。
+
+安装 `requirements.txt` 后启动 FastAPI：
+
+```powershell
+python -m dota_review.api
+```
+
+如果已经构建 Vue 页面，打开 `http://127.0.0.1:8765/` 即可。首次构建或开发前端时：
+
+```powershell
+cd frontend
+npm install
+npm run build
+```
+
+开发模式运行 `npm run dev`，Vite 页面默认在 `http://127.0.0.1:5173/`，并把 API 请求转发到 FastAPI。FastAPI 只绑定本机回环地址。网页支持比赛切换、时间轴播放/定位、地图图层、英雄选择、当前时刻物品栏查看和分路编辑。
+
+网页已接入 LangGraph 复盘 Agent，提供三类证据型分析：
+
+- **选手分析**：按 10/15/20/30 分钟展示经济、补刀和队内经济名次，并汇总该选手的眼位放置。
+- **眼位热区**：按约 900 个世界坐标单位聚合双方侦查守卫/岗哨记录；可在地图叠加热点，并从来源跳回录像时间。
+- **战队风格**：按已导入且队名可识别的比赛统计胜率、时长、前 15 分钟击杀、烟雾、眼位、拆塔和肉山记录。样本量会标出；目前不足以形成稳定战术结论。
+
+Agent 通过受控只读分析函数取数，不允许模型直接执行 SQL。模型未配置时，LangGraph 会使用确定性分析和模板答复；配置模型后会让模型对同一份结构化证据做自然语言综合。可在 `.env` 设置 `DOTA_AGENT_MODEL`（如 `provider:model`），并按所选 provider 设置 `DOTA_AGENT_API_KEY` 或 provider 官方环境变量；可选 `DOTA_AGENT_BASE_URL` 用于兼容接口。provider 对应的 LangChain 集成包需另行安装。对话检查点默认保存在 `dota_data/agent-state.sqlite3`，可用 `DOTA_AGENT_STATE_DB` 修改。当前网页只绑定本机，尚未提供多用户身份与会话隔离。
+
+当前标准化数据没有可靠的击杀者/被击杀者 slot 关联，因此选手分析不会推断个人 K/D/A。眼位热区是放置位置聚合，不代表真实战争迷雾或可见范围。战队风格只反映资料库中已导入的比赛，不做因果判断。新导入的录像会自动采集装备快照；桌面 SQLite 与网页 MySQL 目前不会自动同步。
+
+逐秒装备快照需要先由数据库管理员执行 `scripts/upgrade_mysql_interactive.sql`，再运行 `python scripts/backfill_inventory.py` 为本地已有录像补录数据。此升级只授予玩家分路字段更新权限，以及新装备快照表的读写权限。未升级时地图和比赛详情仍可读，但装备查询和分路保存会提示不可用。
+
+Tkinter 桌面端仍以 `dota_data\review.sqlite3` 作为本地数据源；FastAPI 网页端读取已迁移到 MySQL 的数据副本。两端目前不会自动同步，桌面端后续新增或修改的比赛尚不会自动出现在网页端。每场比赛的录像、OpenDota 元数据、HTML 报告和 CSV 仍放在 `dota_data\matches\对阵\北京时间__赛事名称__比赛ID\`。导入以录像 SHA-256 去重。报告为单个 HTML 文件，不请求网络资源。
 
 比赛时间和赛事名称优先取自 OpenDota 比赛详情；联网失败时保留“时间待核实”或赛事 ID，之后点击“校验版本”会更新元数据并重命名比赛目录。跨场趋势 CSV 存在 `dota_data\reports`。
 

@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS events (
  PRIMARY KEY(match_key,ordinal), FOREIGN KEY(match_key) REFERENCES matches(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_key,time_s);
+CREATE TABLE IF NOT EXISTS inventory_snapshots (
+ match_key TEXT NOT NULL, slot INTEGER NOT NULL, time_s INTEGER NOT NULL, tick INTEGER NOT NULL,
+ items_json TEXT NOT NULL, PRIMARY KEY(match_key,slot,tick),
+ FOREIGN KEY(match_key) REFERENCES matches(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_time ON inventory_snapshots(match_key,slot,time_s,tick);
 CREATE TABLE IF NOT EXISTS draft (
  match_key TEXT NOT NULL, ordinal INTEGER NOT NULL, team INTEGER, action TEXT,
  hero TEXT, game_time_s INTEGER, raw_json TEXT NOT NULL,
@@ -139,6 +145,10 @@ class Store:
                 (key, int(slot), row["time_s"], row.get("net_worth"), row.get("gold"),
                  row.get("xp"), row.get("last_hits"))
                 for slot, rows in data.get("economy", {}).items() for row in rows])
+            self.db.executemany("INSERT INTO inventory_snapshots VALUES (?,?,?,?,?)", [
+                (key, row["slot"], row["time_s"], row["tick"],
+                 json.dumps(row.get("items", {}), ensure_ascii=False))
+                for row in data.get("inventory_snapshots", [])])
             self.db.executemany("INSERT INTO wards VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", [
                 (key, i, w.get("team"), w.get("kind"), w["time_s"], w.get("end_s"),
                  w.get("x"), w.get("y"), w.get("placer_slot"), w.get("end_reason"),
@@ -215,6 +225,12 @@ class Store:
         for r in self.db.execute("SELECT slot,time_s,tick,x,y FROM positions WHERE match_key=? ORDER BY slot,time_s", (key,)):
             point = dict(r)
             result["positions"].setdefault(str(point.pop("slot")), []).append(point)
+        result["inventory_snapshots"] = []
+        for r in self.db.execute("SELECT slot,time_s,tick,items_json FROM inventory_snapshots "
+                                 "WHERE match_key=? ORDER BY time_s,tick,slot", (key,)):
+            snapshot = dict(r)
+            snapshot["items"] = json.loads(snapshot.pop("items_json") or "{}")
+            result["inventory_snapshots"].append(snapshot)
         result["creeps"] = [dict(r) for r in self.db.execute(
             "SELECT entity_id,kind,team,time_s,x,y FROM creeps WHERE match_key=? ORDER BY time_s,entity_id", (key,))]
         result["economy"] = {}
