@@ -32,7 +32,8 @@ const agentThreadId = ref('')
 const agentInput = ref<HTMLTextAreaElement | null>(null)
 const agentConversation = ref<HTMLDivElement | null>(null)
 const agentSide = ref<'radiant' | 'dire'>('radiant')
-const layers = ref({ heroes: true, wards: true, trails: false, objectives: true, vision: false, wardHeat: false })
+const layers = ref({ heroes: true, wards: true, trails: false, objectives: true, vision: false, wardVision: false, wardHeat: false })
+const selectedWardKey = ref<string | null>(null)
 type DrawingPoint = { x: number; y: number }
 type MapDrawing = { id: string; color: string; points: DrawingPoint[] }
 const DRAWING_COLORS = ['#f0cf83', '#79c4ce', '#d98b78', '#e8e9df']
@@ -41,8 +42,9 @@ const drawingColor = ref(DRAWING_COLORS[0])
 const mapDrawings = ref<MapDrawing[]>([])
 const activeDrawing = ref<MapDrawing | null>(null)
 const mapSvg = ref<SVGSVGElement | null>(null)
-const MAP_WORLD = Object.freeze({ xmin: 7563, xmax: 25900, ymin: 7800, ymax: 25600 })
-const MAP_ART = Object.freeze({ left: 59.57, right: 939.45, top: 59.57, bottom: 935.55 })
+// gem-dota's nine-landmark calibration for the centered square of Game_map_7.41.jpg.
+const MAP_WORLD = Object.freeze({ xmin: 7487, xmax: 25809, ymin: 7693, ymax: 26015 })
+const MAP_ART = Object.freeze({ left: 0, right: 1000, top: 0, bottom: 1000 })
 const MAP_VIEW_BOX = `${MAP_ART.left} ${MAP_ART.top} ${MAP_ART.right - MAP_ART.left} ${MAP_ART.bottom - MAP_ART.top}`
 let timer = 0
 let detailRequest = 0
@@ -160,16 +162,39 @@ const currentHeroes = computed(() => currentPlayers.value.flatMap((player) => {
 const currentWards = computed(() => (detail.value?.wards ?? []).filter((ward) =>
   Number(ward.time_s) <= time.value && (ward.end_s == null || Number(ward.end_s) > time.value),
 ))
+function wardKey(ward: Ward): string {
+  return `${ward.team}:${ward.kind}:${ward.time_s}:${ward.x}:${ward.y}`
+}
+const selectedWard = computed(() => (detail.value?.wards ?? []).find((ward) => wardKey(ward) === selectedWardKey.value) ?? null)
+function selectWard(ward: Ward) {
+  if (ward.kind !== 'observer' || drawingEnabled.value) return
+  selectedWardKey.value = selectedWardKey.value === wardKey(ward) ? null : wardKey(ward)
+  if (selectedWardKey.value) layers.value.wardVision = true
+}
 const currentPhase = computed(() => time.value < 0 || Math.floor(time.value / 300) % 2 === 1 ? '夜晚' : '白天')
 const timeLabel = computed(() => formatTime(time.value))
 const durationLabel = computed(() => formatTime(duration.value))
 const currentObservationCount = computed(() => (detail.value?.map_observations ?? []).filter((item) => item.time_s != null && item.time_s <= time.value).length)
-const visibleMapFeatures = computed(() => [
-  ...(detail.value?.map_features ?? []).filter((feature) => feature.kind !== 'tower' && !isBaseStructure(feature)),
-  ...MAP_TOWER_FEATURES,
-  ...RADIANT_BASE_FEATURES.filter((feature) => feature.kind !== 'tower'),
-  ...DIRE_BASE_FEATURES.filter((feature) => feature.kind !== 'tower'),
-].filter((feature) => feature.kind !== 'tower' || towerStatus(feature).visible))
+const visibleMapFeatures = computed(() => {
+  const recorded = detail.value?.map_features ?? []
+  const anchors = [...MAP_TOWER_FEATURES,
+    ...RADIANT_BASE_FEATURES.filter((feature) => feature.kind !== 'tower'),
+    ...DIRE_BASE_FEATURES.filter((feature) => feature.kind !== 'tower')]
+  const used = new Set<string>()
+  const resolved = anchors.map((anchor): MapFeature => {
+    const identity = anchor.kind === 'tower' ? towerIdentity(anchor.name ?? '') : anchor.name?.toLowerCase()
+    const match = recorded.filter((item) => !used.has(item.feature_id) && item.kind === anchor.kind && item.team === anchor.team
+      && (item.kind === 'tower' ? towerIdentity(item.name ?? '') : item.name?.toLowerCase()) === identity)
+      .sort((a, b) => Math.hypot(a.x - anchor.x, a.y - anchor.y) - Math.hypot(b.x - anchor.x, b.y - anchor.y))[0]
+    if (!match) return anchor
+    used.add(match.feature_id)
+    return { ...anchor, x: match.x, y: match.y, coordinate_source: 'replay' }
+  })
+  return [
+    ...recorded.filter((feature) => feature.kind !== 'tower' && !isBaseStructure(feature)),
+    ...resolved,
+  ].filter((feature) => feature.kind !== 'tower' || towerStatus(feature).visible)
+})
 const latestWardAnalysis = computed(() => [...agentTurns.value].reverse()
   .find((turn) => turn.analysis?.kind === 'ward_hotspots')?.analysis ?? null)
 const wardHeatspots = computed(() => latestWardAnalysis.value?.hotspots ?? [])
@@ -315,11 +340,7 @@ function handleDrawingKey(event: KeyboardEvent) {
 }
 
 function featurePoint(feature: MapFeature): { x: number; y: number; clipped: boolean } {
-  const point = mapPoint(feature.x, feature.y)
-  // Replay entity anchors for these neutral bosses sit off-center from their pits.
-  const pitOffset = feature.kind === 'roshan' ? { x: 40, y: -8 }
-    : feature.kind === 'tormentor' ? { x: 26, y: -18 } : { x: 0, y: 0 }
-  return { ...point, x: point.x + pitOffset.x, y: point.y + pitOffset.y }
+  return mapPoint(feature.x, feature.y)
 }
 
 function featureIcon(feature: MapFeature): string | null {
@@ -346,8 +367,8 @@ function featureIcon(feature: MapFeature): string | null {
 
 function featureIconSize(feature: MapFeature): number {
   const sizes: Record<string, number> = {
-    tower: 17, barracks: 17, ancient: 26, roshan: 28, tormentor: 27,
-    twin_gate: 22, lotus_pool: 19, neutral_camp: 13, watch_tower: 16, shop: 15,
+    tower: 20, barracks: 20, ancient: 25, roshan: 28, tormentor: 27,
+    twin_gate: 23, lotus_pool: 20, neutral_camp: 22, watch_tower: 20, shop: 20,
   }
   return sizes[feature.kind] ?? 16
 }
@@ -419,7 +440,7 @@ function towerStatus(feature: MapFeature): { state: 'alive' | 'destroyed' | 'par
 function featureTitle(feature: MapFeature): string {
   if (feature.kind === 'tower') {
     const status = towerStatus(feature)
-    return `${towerLabel(feature)} · ${status.label} · 7.41 地图基准位置`
+    return `${towerLabel(feature)} · ${status.label} · ${feature.coordinate_source === 'replay' ? '录像实体位置' : '7.41 地图参考位置'}`
   }
   return `${feature.name || featureLabel(feature)} · 录像或地图目录位置`
 }
@@ -449,6 +470,7 @@ async function loadMatches() {
 }
 
 async function selectMatch(id: string, keepAgentContext = false) {
+  selectedWardKey.value = null
   const requestId = ++detailRequest
   selectedId.value = id
   mapDrawings.value = loadMapDrawings(id)
@@ -672,13 +694,15 @@ onBeforeUnmount(() => {
         <div v-if="error" class="error-strip" role="alert"><span>{{ error }}</span><button type="button" @click="loadMatches">重试</button></div>
 
         <div class="map-toolbar">
-          <div class="map-heading"><span class="map-glyph">⌖</span><div><strong>战术地图</strong><small>7.41 示意底图 · 位置按录像坐标绘制</small></div></div>
+          <div class="map-heading"><span class="map-glyph">⌖</span><div><strong>战术地图</strong><small>7.41 俯视地形 · 建筑底图为静态影像，以标记为准</small></div></div>
           <div class="layer-controls" aria-label="地图图层">
             <button type="button" :aria-pressed="layers.heroes" @click="layers.heroes = !layers.heroes"><img class="layer-icon" src="/assets/icons/hero-ally-minimap.png" alt="" />英雄</button>
             <button type="button" :aria-pressed="layers.wards" @click="layers.wards = !layers.wards"><img class="layer-icon" src="/assets/icons/observer-ward-minimap.png" alt="" />眼位</button>
             <button type="button" :aria-pressed="layers.trails" @click="layers.trails = !layers.trails"><i class="legend-line"></i>轨迹</button>
             <button type="button" :aria-pressed="layers.objectives" @click="layers.objectives = !layers.objectives"><img class="layer-icon" src="/assets/icons/tower-90-minimap.png" alt="" />目标</button>
             <button type="button" :aria-pressed="layers.vision" @click="layers.vision = !layers.vision"><i class="legend-ring"></i>视距估算</button>
+            <button type="button" :aria-pressed="layers.wardVision" @click="layers.wardVision = !layers.wardVision" title="1600 范围示意，未计算地形和树木遮挡"><i class="legend-ring"></i>假眼视距</button>
+            <button v-if="selectedWard" type="button" @click="selectedWardKey = null">显示全部假眼</button>
             <button v-if="wardHeatspots.length" type="button" :aria-pressed="layers.wardHeat" @click="layers.wardHeat = !layers.wardHeat"><i class="heat-swatch"></i>眼位热区</button>
             <button type="button" class="draw-toggle" :disabled="!detail" :aria-pressed="drawingEnabled" @click="toggleDrawing"><i class="legend-line"></i>{{ drawingEnabled ? '退出画线' : '画线' }}</button>
             <template v-if="drawingEnabled">
@@ -693,9 +717,12 @@ onBeforeUnmount(() => {
 
         <div class="map-stage">
           <div class="map-stamp"><span>{{ currentPhase }}</span><b>{{ timeLabel }}</b></div>
-          <svg ref="mapSvg" class="tactical-map" :class="{ 'drawing-active': drawingEnabled }" :viewBox="MAP_VIEW_BOX" role="img" aria-label="Dota 2 示意地图和当前时刻的录像实体" @pointerdown="startMapDrawing" @pointermove="continueMapDrawing" @pointerup="stopMapDrawing" @pointercancel="stopMapDrawing" @lostpointercapture="stopMapDrawing">
-            <image :href="'/assets/dota2_map_7_41.png'" x="0" y="0" width="1000" height="1000" preserveAspectRatio="none" />
+          <svg ref="mapSvg" class="tactical-map" :class="{ 'drawing-active': drawingEnabled }" :viewBox="MAP_VIEW_BOX" role="img" aria-label="Dota 2 7.41 俯视地形和当前时刻的录像实体" @pointerdown="startMapDrawing" @pointermove="continueMapDrawing" @pointerup="stopMapDrawing" @pointercancel="stopMapDrawing" @lostpointercapture="stopMapDrawing">
+            <image href="/assets/game-map-7.41.jpg" x="0" y="0" width="1000" height="1000" preserveAspectRatio="xMidYMid slice" />
             <rect v-if="currentPhase === '夜晚'" :x="MAP_ART.left" :y="MAP_ART.top" :width="MAP_ART.right - MAP_ART.left" :height="MAP_ART.bottom - MAP_ART.top" fill="#101a32" opacity=".3" pointer-events="none" />
+            <g v-if="layers.wardVision" class="ward-vision-layer" pointer-events="none">
+              <ellipse v-for="(ward, index) in currentWards.filter(w => w.kind === 'observer' && w.x !== null && w.y !== null && (!selectedWardKey || wardKey(w) === selectedWardKey))" :key="`ward-vision-${index}`" :cx="mapPoint(ward.x!, ward.y!).x" :cy="mapPoint(ward.x!, ward.y!).y" :rx="((MAP_ART.right - MAP_ART.left) * 1600) / (MAP_WORLD.xmax - MAP_WORLD.xmin)" :ry="((MAP_ART.bottom - MAP_ART.top) * 1600) / (MAP_WORLD.ymax - MAP_WORLD.ymin)" :class="[teamClass(ward.team), { uncertain: ward.end_s == null }]" />
+            </g>
             <g v-if="layers.vision && layers.heroes" class="vision-layer">
               <ellipse v-for="entry in currentHeroes" :key="`vision-${entry.player.slot}`" :cx="mapPoint(entry.position.x, entry.position.y).x" :cy="mapPoint(entry.position.x, entry.position.y).y" :rx="((MAP_ART.right - MAP_ART.left) * (currentPhase === '白天' ? 1800 : 800)) / (MAP_WORLD.xmax - MAP_WORLD.xmin)" :ry="((MAP_ART.bottom - MAP_ART.top) * (currentPhase === '白天' ? 1800 : 800)) / (MAP_WORLD.ymax - MAP_WORLD.ymin)" :class="teamClass(entry.player.team)" />
             </g>
@@ -712,14 +739,16 @@ onBeforeUnmount(() => {
             <g v-if="layers.objectives" class="feature-layer">
               <g v-for="feature in visibleMapFeatures" :key="feature.feature_id" :data-feature-id="feature.feature_id" :data-kind="feature.kind" :data-state="feature.kind === 'tower' ? towerStatus(feature).state : undefined" :data-world-x="feature.x" :data-world-y="feature.y" :transform="`translate(${featurePoint(feature).x} ${featurePoint(feature).y})`" :class="['feature-marker', feature.kind, teamClass(feature.team), feature.kind === 'tower' ? `tower-${towerStatus(feature).state}` : '']">
                 <title>{{ featureTitle(feature) }}</title>
-                <circle :r="featureIconSize(feature) / 2 + 3" />
-                <image v-if="featureIcon(feature)" :href="featureIcon(feature)!" :x="-featureIconSize(feature) / 2" :y="-featureIconSize(feature) / 2" :width="featureIconSize(feature)" :height="featureIconSize(feature)" preserveAspectRatio="xMidYMid meet" />
-                <text v-else y="3.5">{{ featureLabel(feature).slice(0, 1) }}</text>
+                <rect v-if="feature.kind === 'tower'" class="tower-symbol" x="-10" y="-10" width="20" height="20" />
+                <circle v-else-if="!featureIcon(feature)" :r="featureIconSize(feature) / 2 + 3" />
+                <image v-if="feature.kind !== 'tower' && featureIcon(feature)" :class="{ 'ancient-camp': feature.kind === 'neutral_camp' && (feature.name || '').toLowerCase().includes('ancient') }" :href="featureIcon(feature)!" :x="-featureIconSize(feature) / 2" :y="-featureIconSize(feature) / 2" :width="featureIconSize(feature)" :height="featureIconSize(feature)" preserveAspectRatio="xMidYMid meet" />
+                <text v-else-if="feature.kind !== 'tower'" y="3.5">{{ featureLabel(feature).slice(0, 1) }}</text>
               </g>
             </g>
             <g v-if="layers.wards" class="ward-layer">
-              <g v-for="(ward, index) in currentWards.filter(w => w.x !== null && w.y !== null)" :key="`ward-${index}`" :data-time="ward.time_s" :data-world-x="ward.x" :data-world-y="ward.y" :transform="`translate(${mapPoint(ward.x!, ward.y!).x} ${mapPoint(ward.x!, ward.y!).y})`" :class="['ward-marker', ward.kind === 'sentry' ? 'sentry' : 'observer']">
+              <g v-for="(ward, index) in currentWards.filter(w => w.x !== null && w.y !== null)" :key="`ward-${index}`" :data-time="ward.time_s" :data-world-x="ward.x" :data-world-y="ward.y" :transform="`translate(${mapPoint(ward.x!, ward.y!).x} ${mapPoint(ward.x!, ward.y!).y})`" :class="['ward-marker', ward.kind === 'sentry' ? 'sentry' : 'observer', { selected: wardKey(ward) === selectedWardKey }]" @click.stop="selectWard(ward)" @keydown.enter.prevent="selectWard(ward)" :tabindex="ward.kind === 'observer' ? 0 : undefined" :role="ward.kind === 'observer' ? 'button' : undefined" :aria-label="ward.kind === 'observer' ? `选择${ward.team === 2 ? '天辉' : ward.team === 3 ? '夜魇' : ''}假眼 ${formatTime(ward.time_s)}` : undefined">
                 <title>{{ ward.kind === 'sentry' ? '岗哨守卫' : '侦查守卫' }} · {{ formatTime(ward.time_s) }}{{ ward.end_s == null ? ' · 结束时间未知' : ` 至 ${formatTime(ward.end_s)}` }}</title>
+                <circle v-if="wardKey(ward) === selectedWardKey" class="ward-selection" r="12" />
                 <image :href="ward.kind === 'sentry' ? '/assets/icons/sentry-ward-minimap.png' : '/assets/icons/observer-ward-minimap.png'" x="-8" y="-8" width="16" height="16" preserveAspectRatio="xMidYMid meet" />
               </g>
             </g>
@@ -740,7 +769,7 @@ onBeforeUnmount(() => {
           </svg>
           <div v-if="!detail" class="map-empty"><span>⌖</span><p>地图将在选中比赛后显示</p></div>
           <div v-if="drawingEnabled" class="map-drawing-hint">拖动地图绘制 · Esc 结束</div>
-          <div class="map-corner">按 7.41 世界坐标投影</div>
+          <div class="map-corner">{{ layers.wardVision ? `${selectedWard ? '已选假眼 · ' : '点击假眼可单独查看 · '}1600 范围示意，不含地形遮挡；虚线表示结束时间未知` : '按 7.41 世界坐标投影' }}</div>
           <div class="map-key"><span><i class="key-radiant" />天辉英雄</span><span><i class="key-dire" />夜魇英雄</span><span><img src="/assets/icons/observer-ward-minimap.png" alt="" />眼位</span></div>
         </div>
 
@@ -846,7 +875,7 @@ onBeforeUnmount(() => {
                 <div v-for="row in turn.analysis.checkpoints" :key="row.target_time_s" class="analysis-card">
                   <b>{{ Math.floor(row.target_time_s / 60) }} 分钟</b><span>经济 {{ Number(row.net_worth).toLocaleString() }}</span><span>补刀 {{ row.last_hits }}</span><span>队内经济 {{ row.team_net_worth_rank }}/{{ row.team_size }}</span>
                 </div>
-                <small>眼位：真眼 {{ turn.analysis.observer_wards }} · 假眼 {{ turn.analysis.sentry_wards }}</small>
+                <small>眼位：假眼 {{ turn.analysis.observer_wards }} · 真眼 {{ turn.analysis.sentry_wards }}</small>
               </div>
               <div v-else-if="turn.analysis?.kind === 'ward_hotspots'" class="analysis-cards">
                 <small>坐标热区（眼位记录 {{ turn.analysis.placement_count }} 个）</small>

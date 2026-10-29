@@ -6,6 +6,7 @@ import uuid
 from typing import Any
 
 from .agent_analytics import player_analysis, team_style, ward_hotspots
+from .vision_knowledge import retrieve_vision_knowledge
 
 _MODES = {"player", "ward_hotspots", "team_style"}
 
@@ -51,7 +52,8 @@ def fallback_answer(intent: str, analysis: dict[str, Any]) -> str:
             for row in top)
         return (f"共找到 {analysis.get('placement_count', 0)} 个带坐标的眼位记录。"
                 f"天辉 {counts.get('radiant', {})}，夜魇 {counts.get('dire', {})}。"
-                f"高频位置：{spots or '没有可聚合的热点'}。热区只表示重复放置坐标，不等同于实际视野。")
+                f"高频位置：{spots or '没有可聚合的热点'}。热区只表示重复放置坐标，不等同于实际视野。"
+                + (" 知识库：" + " ".join(item["text"] + " 来源：" + item["source"] for item in analysis.get("knowledge", []))))
     if intent == "team_style":
         metrics = analysis.get("metrics", {})
         sample = metrics.get("matches", 0)
@@ -78,6 +80,7 @@ def run_evidence_only(match_key: str, message: str, *, selected_slot: int | None
             analysis = player_analysis(match_key, int(selected_slot))
     elif intent == "ward_hotspots":
         analysis = ward_hotspots(match_key)
+        analysis["knowledge"] = retrieve_vision_knowledge(message or "眼位视野")
     elif intent == "team_style":
         analysis = team_style(match_key, side or "radiant")
     else:

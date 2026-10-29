@@ -75,6 +75,7 @@ export interface MapFeature {
   name: string | null
   x: number
   y: number
+  coordinate_source?: 'replay'
 }
 
 export interface Observation {

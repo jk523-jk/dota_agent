@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from .agent_analytics import player_analysis, team_style, ward_hotspots
+from .vision_knowledge import retrieve_vision_knowledge
 
 _ROOT = Path(__file__).resolve().parents[1]
 _MODELS = {"player", "ward_hotspots", "team_style"}
@@ -115,6 +116,8 @@ def _gather(state: AgentState) -> dict[str, Any]:
             analysis = player_analysis(state["match_key"], int(slot))
         elif intent == "ward_hotspots":
             analysis = ward_hotspots(state["match_key"])
+            question = next((str(m.content) for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)), "眼位视野")
+            analysis["knowledge"] = retrieve_vision_knowledge(question or "眼位视野")
         elif intent == "team_style":
             analysis = team_style(state["match_key"], state.get("side") or "radiant")
         else:
@@ -152,7 +155,8 @@ def _fallback_answer(intent: str, analysis: dict[str, Any]) -> str:
             for row in top)
         return (f"共找到 {analysis.get('placement_count', 0)} 个带坐标的眼位记录。"
                 f"天辉 {counts.get('radiant', {})}，夜魇 {counts.get('dire', {})}。"
-                f"高频位置：{spots or '没有可聚合的热点'}。热区只表示重复放置坐标，不等同于实际视野。")
+                f"高频位置：{spots or '没有可聚合的热点'}。热区只表示重复放置坐标，不等同于实际视野。"
+                + (" 知识库：" + " ".join(item["text"] + " 来源：" + item["source"] for item in analysis.get("knowledge", []))))
     if intent == "team_style":
         metrics = analysis.get("metrics", {})
         sample = metrics.get("matches", 0)
@@ -257,6 +261,7 @@ def run_evidence_only(match_key: str, message: str, *, selected_slot: int | None
             analysis = player_analysis(match_key, int(selected_slot))
     elif intent == "ward_hotspots":
         analysis = ward_hotspots(match_key)
+        analysis["knowledge"] = retrieve_vision_knowledge(message or "眼位视野")
     elif intent == "team_style":
         analysis = team_style(match_key, side or "radiant")
     else:

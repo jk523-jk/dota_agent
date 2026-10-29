@@ -1,0 +1,112 @@
+[
+  {
+    "id": "observer-radius",
+    "patch": "7.41",
+    "keywords": [
+      "眼",
+      "守卫",
+      "视野",
+      "vision",
+      "ward",
+      "范围"
+    ],
+    "text": "侦查守卫（假眼）的基础视距半径为 1600 世界单位；范围圆是无障碍物模型，不等于真实可见区域。",
+    "source": "https://whanyu1212.github.io/gem-dota/cookbook/wards"
+  },
+  {
+    "id": "occlusion",
+    "patch": "7.41",
+    "keywords": [
+      "眼",
+      "守卫",
+      "视野",
+      "地形",
+      "高地",
+      "树",
+      "遮挡",
+      "vision",
+      "ward",
+      "terrain"
+    ],
+    "text": "地形高低差和树木会遮挡守卫视线；动态树木状态、游戏版本与其他视野机制也可能影响实际结果。单靠底图和守卫坐标无法重建真实战争迷雾。",
+    "source": "https://whanyu1212.github.io/gem-dota/cookbook/wards"
+  },
+  {
+    "id": "replay-vision",
+    "patch": "7.41",
+    "keywords": [
+      "录像",
+      "视野",
+      "团队",
+      "replay",
+      "vision",
+      "ward",
+      "守卫",
+      "眼"
+    ],
+    "text": "录像中的团队可见性涉及英雄、建筑、守卫等所有视野来源，不能直接归因于单个守卫；隐身等状态也会影响单位是否被发现。",
+    "source": "https://whanyu1212.github.io/gem-dota/cookbook/wards"
+  },
+  {
+    "id": "map",
+    "patch": "7.41",
+    "keywords": [
+      "地图",
+      "map",
+      "坐标",
+      "7.41",
+      "视野",
+      "守卫",
+      "眼",
+      "ward",
+      "vision"
+    ],
+    "text": "项目已有 7.41 游戏小地图资源和世界坐标投影；图片提供地图背景，不含可用于视线计算的地形高度或动态树木遮挡数据。",
+    "source": "https://liquipedia.net/commons/Category:Dota_2_minimap_images"
+  },
+  {
+    "id": "ward-lifetime",
+    "patch": "7.41",
+    "keywords": [
+      "眼",
+      "守卫",
+      "时间",
+      "持续",
+      "消失",
+      "ward",
+      "time"
+    ],
+    "text": "守卫记录按放置时刻到销毁或过期时刻的半开区间解释；缺少结束时刻时应标记未知，不能认定之后一直有效。",
+    "source": "https://whanyu1212.github.io/gem-dota/cookbook/wards"
+  },
+  {
+    "id": "smoke-invisibility",
+    "patch": "7.41",
+    "keywords": [
+      "眼",
+      "视野",
+      "诡计之雾",
+      "隐身",
+      "开雾",
+      "smoke",
+      "invisibility",
+      "vision"
+    ],
+    "text": "诡计之雾和隐身会影响英雄是否可被发现；英雄位于守卫的范围圆内，并不证明该队实际看见该英雄。",
+    "source": "https://whanyu1212.github.io/gem-dota/cookbook/wards"
+  },
+  {
+    "id": "team-visibility",
+    "patch": "7.41",
+    "keywords": [
+      "录像",
+      "可见",
+      "视野",
+      "visibility",
+      "replay",
+      "vision"
+    ],
+    "text": "gem 文档描述英雄对各队可见状态的录像事件，可反映英雄是否被队伍看到；这是团队可见性，不能直接确定是哪一个守卫提供视野。文档使用的 gem 版本与本项目所用版本需分别核实。",
+    "source": "https://whanyu1212.github.io/gem-dota/cookbook/wards"
+  }
+]

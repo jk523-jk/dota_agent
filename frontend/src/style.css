@@ -101,7 +101,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .heat-swatch { width: 9px; height: 9px; border: 1px solid #86c3b0; border-radius: 50%; background: #86c3b055; box-shadow: 0 0 6px #86c3b077; }
 .legend-line { height: 2px; background: #9ab0a0; }
 .map-stage { position: relative; min-height: max(340px, min(960px, calc(100vh - 80px))); flex: 1; display: grid; place-items: center; overflow: hidden; background: #1d2420; border: 1px solid #59645a; }
-.tactical-map { display: block; width: min(100%, 960px, calc(100vh - 80px)); max-width: 100%; max-height: 100%; aspect-ratio: 879.88 / 875.98; }
+.tactical-map { display: block; width: min(100%, 960px, calc(100vh - 80px)); max-width: 100%; max-height: 100%; aspect-ratio: 1; }
 .tactical-map.drawing-active { cursor: crosshair; touch-action: none; }
 .user-drawing-layer polyline { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; opacity: .94; filter: drop-shadow(0 1px 2px #101510); }
 .user-drawing-layer .drawing-preview { stroke-dasharray: 8 4; opacity: .78; }
@@ -132,7 +132,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .hero-marker text, .feature-marker text { text-anchor: middle; fill: #142019; font: 700 8px "Aptos", "Microsoft YaHei UI", sans-serif; pointer-events: none; }
 .hero-marker.dire text { fill: #2e1914; }
 .ward-marker image, .feature-marker image { image-rendering: pixelated; }
+.ward-marker.observer { cursor: pointer; }
+.ward-selection { fill: none; stroke: #f5e58e; stroke-width: 2; pointer-events: none; }
 .feature-marker circle { fill: #202820; stroke-width: 1.5; }
+.feature-marker .tower-symbol { stroke: #101610; stroke-width: 1.5; fill: #b4b5ac; }
+.feature-marker.radiant .tower-symbol { fill: #a6e64b; }
+.feature-marker.dire .tower-symbol { fill: #e62a24; }
+.feature-marker.neutral_camp image:not(.ancient-camp) { filter: sepia(1) saturate(5) hue-rotate(358deg) brightness(.78); }
+.feature-marker.barracks.radiant image, .feature-marker.ancient.radiant image { filter: sepia(1) saturate(5) hue-rotate(40deg) brightness(1.05); }
+.feature-marker.barracks.dire image, .feature-marker.ancient.dire image { filter: sepia(1) saturate(7) hue-rotate(315deg) brightness(.9); }
 .feature-marker text { fill: #eee5cb; font-size: 7px; }
 .feature-marker.radiant circle { stroke: #9bb497; }
 .feature-marker.dire circle { stroke: #c6816d; }
@@ -350,3 +358,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   from { opacity: .45; transform: scale(.85); }
   to { opacity: 1; transform: scale(1.15); }
 }
+
+.ward-vision-layer ellipse { fill: #a9c898; fill-opacity: .12; stroke: #c1e4ae; stroke-opacity: .65; stroke-width: 1.5; }
+.ward-vision-layer ellipse.dire { fill: #d68370; stroke: #eaa697; }
+.ward-vision-layer ellipse.uncertain { stroke-dasharray: 5 4; }
